@@ -42,8 +42,8 @@ const redisSubscriber = new Redis({
   maxRetriesPerRequest: null,
 });
 
-redisSubscriber.on('connect', () => {
-  console.log('Redis subscriber client connected.');
+redisSubscriber.on('ready', () => {
+  console.log('Redis subscriber client ready.');
   redisSubscriber.subscribe('queue:events', (err) => {
     if (err) {
       console.error('Failed to subscribe to queue:events:', err);
