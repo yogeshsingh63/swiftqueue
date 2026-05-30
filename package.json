@@ -1,0 +1,16 @@
+{
+  "name": "swiftqueue-root",
+  "version": "1.0.0",
+  "description": "Custom Distributed Task Queue & Monitoring Dashboard",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix worker && npm install --prefix dashboard",
+    "dev:server": "npm run dev --prefix server",
+    "dev:worker": "npm run dev --prefix worker",
+    "dev:dashboard": "npm run dev --prefix dashboard",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:worker\" \"npm run dev:dashboard\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
