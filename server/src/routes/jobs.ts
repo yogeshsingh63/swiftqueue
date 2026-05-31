@@ -1,36 +1,135 @@
+// =============================================================================
+// REST API ROUTES (V2)
+// =============================================================================
+// These are the HTTP endpoints that external apps call to interact with
+// SwiftQueue. Any application (in any language) can enqueue jobs, check
+// results, and manage the queue through these endpoints.
+//
+// V2 CHANGES FROM V1:
+//   - Jobs accept user-provided payloads (not hardcoded)
+//   - Payload validation per job type
+//   - New: GET /api/jobs/:id/result — fetch stored result for a completed job
+//   - New: GET /api/jobs/history — fetch last N job summaries
+//   - Bulk endpoint updated for V2 job types
+// =============================================================================
+
 import { Router, Request, Response } from 'express';
-import { enqueue, KEYS } from '../queue/producer';
+import { enqueue, KEYS, JobType } from '../queue/producer';
 import { redis } from '../config/redis';
 
 const router = Router();
 
-// Helper to construct payloads based on job type
-const getJobPayload = (type: string) => {
-  switch (type) {
-    case 'email':
-      return { to: 'user@example.com', subject: 'Welcome to SwiftQueue!', template: 'welcome_email' };
-    case 'report':
-      return { reportId: Math.floor(Math.random() * 10000), format: 'PDF', includeCharts: true };
-    case 'image':
-      return { imageUrl: 'https://example.com/assets/avatar.png', resizeWidth: 800, format: 'webp' };
-    default:
-      return { randomData: Math.random().toString(36).substring(7) };
-  }
-};
+// =============================================================================
+// PAYLOAD VALIDATION
+// =============================================================================
+// Each job type requires specific fields in the payload. This function
+// validates the payload BEFORE enqueueing to catch errors early.
+//
+// WHY VALIDATE ON THE SERVER (not the worker)?
+//   If we let invalid payloads through, the worker will fail immediately,
+//   waste a retry cycle, and eventually DLQ the job. Validating upfront
+//   gives the API caller an immediate 400 error with a clear message.
+// =============================================================================
 
-/**
- * POST /api/jobs - Enqueue a single job
- */
+const VALID_JOB_TYPES: JobType[] = ['http_request', 'hash_file', 'data_pipeline', 'web_scrape'];
+
+function validatePayload(type: JobType, payload: Record<string, any>): string | null {
+  switch (type) {
+    case 'http_request':
+      if (!payload.url) return 'http_request requires "url" in payload';
+      try {
+        new URL(payload.url);
+      } catch {
+        return `Invalid URL: "${payload.url}"`;
+      }
+      if (payload.method && !['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].includes(payload.method.toUpperCase())) {
+        return `Invalid HTTP method: "${payload.method}"`;
+      }
+      return null;
+
+    case 'hash_file':
+      if (!payload.url) return 'hash_file requires "url" in payload';
+      try {
+        new URL(payload.url);
+      } catch {
+        return `Invalid URL: "${payload.url}"`;
+      }
+      return null;
+
+    case 'data_pipeline':
+      // URL is optional (defaults to JSONPlaceholder API)
+      if (payload.url) {
+        try {
+          new URL(payload.url);
+        } catch {
+          return `Invalid URL: "${payload.url}"`;
+        }
+      }
+      return null;
+
+    case 'web_scrape':
+      if (!payload.url) return 'web_scrape requires "url" in payload';
+      try {
+        new URL(payload.url);
+      } catch {
+        return `Invalid URL: "${payload.url}"`;
+      }
+      return null;
+
+    default:
+      return `Unknown job type: "${type}"`;
+  }
+}
+
+// =============================================================================
+// POST /api/jobs — Enqueue a single job
+// =============================================================================
+// This is the primary endpoint that external applications call.
+//
+// Request body:
+// {
+//   "type": "http_request",              // Required: job type
+//   "payload": { "url": "..." },         // Required: type-specific data
+//   "priority": "high",                  // Optional: high/medium/low (default: medium)
+//   "delayMs": 5000,                     // Optional: delay before execution
+//   "maxRetries": 3,                     // Optional: retry limit (default: 3)
+//   "retryStrategy": "exponential",      // Optional: fixed or exponential (default: exponential)
+//   "retryDelayMs": 2000,                // Optional: base retry delay in ms (default: 2000)
+//   "forceFail": false                   // Optional: testing flag
+// }
+// =============================================================================
+
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { type, delayMs, forceFail } = req.body;
+    const { type, payload, priority, delayMs, maxRetries, retryStrategy, retryDelayMs, forceFail } = req.body;
 
-    if (!type || !['email', 'report', 'image'].includes(type)) {
-      return res.status(400).json({ error: 'Invalid job type. Must be: email, report, or image.' });
+    // Validate job type
+    if (!type || !VALID_JOB_TYPES.includes(type)) {
+      return res.status(400).json({
+        error: `Invalid job type. Must be one of: ${VALID_JOB_TYPES.join(', ')}`,
+      });
     }
 
-    const payload = getJobPayload(type);
-    const job = await enqueue(type, payload, delayMs || 0, !!forceFail);
+    // Validate payload exists
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json({ error: 'Payload must be a JSON object.' });
+    }
+
+    // Validate payload fields for the specific job type
+    const validationError = validatePayload(type, payload);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
+    }
+
+    // Enqueue the job
+    const job = await enqueue(type, payload, {
+      priority,
+      delayMs: delayMs || 0,
+      maxRetries: maxRetries !== undefined ? maxRetries : 3,
+      retryStrategy: retryStrategy || 'exponential',
+      retryDelayMs: retryDelayMs || 2000,
+      forceFail: !!forceFail,
+    });
 
     return res.status(201).json({ message: 'Job enqueued successfully', job });
   } catch (error: any) {
@@ -39,25 +138,75 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /api/jobs/bulk - Enqueue multiple jobs in bulk (e.g. for testing)
- */
+// =============================================================================
+// POST /api/jobs/bulk — Enqueue multiple jobs
+// =============================================================================
+// Used by the dashboard's quick-action buttons and for load testing.
+// Accepts a count and creates multiple jobs with randomized real payloads.
+// =============================================================================
+
+// Helper: generate realistic random payloads for each job type
+const getRandomPayload = (type: JobType): Record<string, any> => {
+  switch (type) {
+    case 'http_request': {
+      const urls = [
+        'https://httpbin.org/get',
+        'https://httpbin.org/status/200',
+        'https://jsonplaceholder.typicode.com/posts/1',
+        'https://jsonplaceholder.typicode.com/users/1',
+        'https://api.github.com/zen',
+      ];
+      return { url: urls[Math.floor(Math.random() * urls.length)], method: 'GET' };
+    }
+    case 'hash_file': {
+      const files = [
+        'https://raw.githubusercontent.com/torvalds/linux/master/COPYING',
+        'https://raw.githubusercontent.com/nodejs/node/main/LICENSE',
+        'https://httpbin.org/bytes/1024',
+      ];
+      return { url: files[Math.floor(Math.random() * files.length)] };
+    }
+    case 'data_pipeline': {
+      const userIds = [1, 2, 3, 4, 5];
+      return {
+        url: 'https://jsonplaceholder.typicode.com/posts',
+        filterField: 'userId',
+        filterValue: userIds[Math.floor(Math.random() * userIds.length)],
+      };
+    }
+    case 'web_scrape': {
+      const sites = [
+        'https://example.com',
+        'https://httpbin.org',
+        'https://jsonplaceholder.typicode.com',
+      ];
+      return { url: sites[Math.floor(Math.random() * sites.length)] };
+    }
+    default:
+      return {};
+  }
+};
+
 router.post('/bulk', async (req: Request, res: Response) => {
   try {
-    const { count, type, delayMs, forceFail } = req.body;
+    const { count, type, delayMs, forceFail, priority } = req.body;
     const jobCount = parseInt(count, 10) || 1;
 
     if (jobCount <= 0 || jobCount > 100) {
       return res.status(400).json({ error: 'Count must be between 1 and 100.' });
     }
 
+    const types: JobType[] = ['http_request', 'hash_file', 'data_pipeline', 'web_scrape'];
     const jobs = [];
-    const types: ('email' | 'report' | 'image')[] = ['email', 'report', 'image'];
 
     for (let i = 0; i < jobCount; i++) {
-      const selectedType = type && types.includes(type) ? type : types[Math.floor(Math.random() * types.length)];
-      const payload = getJobPayload(selectedType);
-      const job = await enqueue(selectedType, payload, delayMs || 0, !!forceFail);
+      const selectedType: JobType = type && types.includes(type) ? type : types[Math.floor(Math.random() * types.length)];
+      const payload = getRandomPayload(selectedType);
+      const job = await enqueue(selectedType, payload, {
+        priority: priority || 'medium',
+        delayMs: delayMs || 0,
+        forceFail: !!forceFail,
+      });
       jobs.push(job);
     }
 
@@ -71,13 +220,24 @@ router.post('/bulk', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/stats - Retrieve current queue sizes and processed statistics
- */
+// =============================================================================
+// GET /api/jobs/stats — Current queue sizes and counters
+// =============================================================================
+// Uses a Redis pipeline to fetch all stats in a single round-trip.
+//
+// WHY PIPELINE?
+//   Without a pipeline, each LLEN/HGETALL is a separate network round-trip
+//   to Redis. With 5 commands, that's 5 round-trips (~5ms on localhost).
+//   A pipeline batches all 5 into a SINGLE round-trip (~1ms total).
+//   At 1 request per second (our metrics engine), this adds up.
+// =============================================================================
+
 router.get('/stats', async (_req: Request, res: Response) => {
   try {
     const pipeline = redis.pipeline();
-    pipeline.llen(KEYS.waiting);
+    pipeline.llen(KEYS.waitingHigh);
+    pipeline.llen(KEYS.waitingMedium);
+    pipeline.llen(KEYS.waitingLow);
     pipeline.llen(KEYS.processing);
     pipeline.zcard(KEYS.delayed);
     pipeline.llen(KEYS.dlq);
@@ -90,28 +250,31 @@ router.get('/stats', async (_req: Request, res: Response) => {
     }
 
     const [
-      [errWaiting, waitingLen],
-      [errProcessing, processingLen],
-      [errDelayed, delayedLen],
-      [errDlq, dlqLen],
-      [errStats, rawStats]
+      [, highLen],
+      [, mediumLen],
+      [, lowLen],
+      [, processingLen],
+      [, delayedLen],
+      [, dlqLen],
+      [, rawStats]
     ] = results;
-
-    if (errWaiting || errProcessing || errDelayed || errDlq || errStats) {
-      throw new Error('Pipeline error fetching stats');
-    }
 
     const stats = rawStats as Record<string, string>;
 
     return res.json({
-      waiting: waitingLen || 0,
+      waiting: (highLen as number || 0) + (mediumLen as number || 0) + (lowLen as number || 0),
+      waitingByPriority: {
+        high: highLen || 0,
+        medium: mediumLen || 0,
+        low: lowLen || 0,
+      },
       processing: processingLen || 0,
       delayed: delayedLen || 0,
       dlq: dlqLen || 0,
       stats: {
-        success: parseInt(stats.success || '0', 10),
-        failure: parseInt(stats.failure || '0', 10),
-        enqueued: parseInt(stats.enqueued || '0', 10),
+        success: parseInt(stats?.success || '0', 10),
+        failure: parseInt(stats?.failure || '0', 10),
+        enqueued: parseInt(stats?.enqueued || '0', 10),
       }
     });
   } catch (error: any) {
@@ -120,9 +283,63 @@ router.get('/stats', async (_req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /api/jobs/dlq/replay - Replay all jobs currently in the DLQ
- */
+// =============================================================================
+// GET /api/jobs/:id/result — Fetch the stored result of a completed job
+// =============================================================================
+// After a worker finishes a job, it stores the result in Redis at
+// job:result:<id> with a 1-hour TTL. This endpoint retrieves it.
+// =============================================================================
+
+router.get('/:id/result', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const resultKey = `${KEYS.jobResultPrefix}${id}`;
+    const resultJson = await redis.get(resultKey);
+
+    if (!resultJson) {
+      return res.status(404).json({
+        error: 'Result not found. Job may still be processing, or result has expired (TTL: 1 hour).',
+      });
+    }
+
+    return res.json(JSON.parse(resultJson));
+  } catch (error: any) {
+    console.error('Error fetching job result:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+  }
+});
+
+// =============================================================================
+// GET /api/jobs/history — Fetch the last N job summaries
+// =============================================================================
+// Returns the most recent completed/failed job summaries from queue:history.
+// The list is capped at 200 entries by the worker.
+// =============================================================================
+
+router.get('/history', async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 200);
+    const historyJson = await redis.lrange(KEYS.jobHistory, 0, limit - 1);
+
+    const history = historyJson.map((json: string) => {
+      try {
+        return JSON.parse(json);
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+
+    return res.json({ history, count: history.length });
+  } catch (error: any) {
+    console.error('Error fetching job history:', error);
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+  }
+});
+
+// =============================================================================
+// DLQ MANAGEMENT ENDPOINTS
+// =============================================================================
+
 router.post('/dlq/replay', async (_req: Request, res: Response) => {
   try {
     const dlqJobs = await redis.lrange(KEYS.dlq, 0, -1);
@@ -135,18 +352,22 @@ router.post('/dlq/replay', async (_req: Request, res: Response) => {
       const job = JSON.parse(jobJson);
       // Reset retry count so workers try executing it fresh
       job.retryCount = 0;
-      multi.lpush(KEYS.waiting, JSON.stringify(job));
+      job.status = 'waiting';
+      // Push to the correct priority queue
+      const waitingKey =
+        job.priority === 'high' ? KEYS.waitingHigh :
+        job.priority === 'medium' ? KEYS.waitingMedium :
+        KEYS.waitingLow;
+      multi.lpush(waitingKey, JSON.stringify(job));
     }
-    // Delete the DLQ list
     multi.del(KEYS.dlq);
 
     await multi.exec();
 
-    // Publish event
     const event = {
       timestamp: Date.now(),
       level: 'info',
-      message: `Replayed ${dlqJobs.length} jobs from DLQ back to Waiting queue.`,
+      message: `Replayed ${dlqJobs.length} jobs from DLQ back to their priority queues.`,
     };
     await redis.publish('queue:events', JSON.stringify(event));
 
@@ -160,9 +381,6 @@ router.post('/dlq/replay', async (_req: Request, res: Response) => {
   }
 });
 
-/**
- * DELETE /api/jobs/dlq/clear - Clear all jobs in the DLQ
- */
 router.delete('/dlq/clear', async (_req: Request, res: Response) => {
   try {
     const count = await redis.llen(KEYS.dlq);

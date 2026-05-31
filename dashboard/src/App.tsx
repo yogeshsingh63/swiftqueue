@@ -22,9 +22,16 @@ import {
 import { StatCard } from './components/StatCard';
 import { TriggerActions } from './components/TriggerActions';
 import { JobLog, LogEntry } from './components/JobLog';
+import { JobCreator } from './components/JobCreator';
+import { JobHistory } from './components/JobHistory';
 
 interface QueueStats {
   waiting: number;
+  waitingByPriority?: {
+    high: number;
+    medium: number;
+    low: number;
+  };
   processing: number;
   delayed: number;
   dlq: number;
@@ -76,7 +83,7 @@ export default function App() {
           {
             timestamp: Date.now(),
             level: 'success',
-            message: 'Dashboard connected to stats streaming server.',
+            message: 'Dashboard connected to SwiftQueue V2 server.',
           },
         ]);
       };
@@ -102,13 +109,16 @@ export default function App() {
                   DLQ: data.dlq,
                 },
               ];
-              // Keep last 15 points
-              return next.slice(-15);
+              return next.slice(-20);
             });
 
           } else if (payload.type === 'log') {
             const data: LogEntry = payload.data;
-            setLogs((prev) => [...prev, data].slice(-100)); // Cap logs at 100
+            setLogs((prev) => [...prev, data].slice(-150));
+          } else if (payload.type === 'progress') {
+            // Progress events can be used for live progress bars in the future
+            // For now, we log them as telemetry
+            console.log(`[Progress] Job ${payload.data.jobId}: ${payload.data.percent}%`);
           }
         } catch (e) {
           console.error('[WebSocket] Message parsing error:', e);
@@ -124,9 +134,7 @@ export default function App() {
         setConnStatus('disconnected');
         wsRef.current = null;
         setTimeout(() => {
-          if (connStatus !== 'connected') {
-            connectWS();
-          }
+          connectWS();
         }, 3000);
       };
 
@@ -142,17 +150,15 @@ export default function App() {
     };
   }, []);
 
-  // REST API Methods
+  // REST API Methods for quick actions
   const addInstantJobs = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/bulk`, {
+      await fetch(`${API_BASE}/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ count: 10 }),
       });
-      const data = await res.json();
-      console.log('Instant bulk inject response:', data);
     } catch (e) {
       console.error('Failed to inject instant jobs:', e);
     } finally {
@@ -163,13 +169,11 @@ export default function App() {
   const addDelayedJobs = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/bulk`, {
+      await fetch(`${API_BASE}/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count: 5, delayMs: 10000 }), // 10 seconds delay
+        body: JSON.stringify({ count: 5, delayMs: 10000 }),
       });
-      const data = await res.json();
-      console.log('Delayed bulk inject response:', data);
     } catch (e) {
       console.error('Failed to inject delayed jobs:', e);
     } finally {
@@ -180,13 +184,11 @@ export default function App() {
   const triggerFailureJob = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}`, {
+      await fetch(`${API_BASE}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'email', forceFail: true }),
+        body: JSON.stringify({ type: 'http_request', payload: { url: 'https://httpbin.org/get' }, forceFail: true }),
       });
-      const data = await res.json();
-      console.log('Failed job response:', data);
     } catch (e) {
       console.error('Failed to inject failing job:', e);
     } finally {
@@ -197,9 +199,7 @@ export default function App() {
   const handleReplayDLQ = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/dlq/replay`, { method: 'POST' });
-      const data = await res.json();
-      console.log('Replay DLQ response:', data);
+      await fetch(`${API_BASE}/dlq/replay`, { method: 'POST' });
     } catch (e) {
       console.error('Failed to replay DLQ:', e);
     } finally {
@@ -210,9 +210,7 @@ export default function App() {
   const handleClearDLQ = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/dlq/clear`, { method: 'DELETE' });
-      const data = await res.json();
-      console.log('Clear DLQ response:', data);
+      await fetch(`${API_BASE}/dlq/clear`, { method: 'DELETE' });
     } catch (e) {
       console.error('Failed to clear DLQ:', e);
     } finally {
@@ -240,7 +238,7 @@ export default function App() {
                 SwiftQueue
               </h1>
               <p className="text-xs text-slate-400 font-medium tracking-wide mt-0.5">
-                Custom Distributed Task Queue Broker & Console
+                Custom Distributed Task Queue — V2
               </p>
             </div>
           </div>
@@ -249,7 +247,7 @@ export default function App() {
           <div className="flex items-center space-x-3 bg-slate-900/80 border border-slate-800/80 px-4 py-2 rounded-2xl">
             <div className="flex items-center space-x-2">
               <Network className="w-4 h-4 text-slate-400" />
-              <span className="text-xs font-mono font-medium text-slate-400">Node Server Status:</span>
+              <span className="text-xs font-mono font-medium text-slate-400">Server:</span>
             </div>
             <div className="flex items-center space-x-1.5">
               <span className={`w-2 h-2 rounded-full ${
@@ -270,11 +268,11 @@ export default function App() {
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
             id="card-active"
-            title="Active Workers Processing"
+            title="Active Processing"
             value={stats.processing}
             icon={Activity}
             variant="blue"
-            description="Jobs popped atomically and actively executing in worker thread pool."
+            description="Jobs currently executing in worker processes."
           />
           <StatCard
             id="card-pending"
@@ -282,7 +280,7 @@ export default function App() {
             value={stats.waiting}
             icon={Layers}
             variant="purple"
-            description="Serialized payloads awaiting polling by available workers."
+            description={stats.waitingByPriority ? `H:${stats.waitingByPriority.high} M:${stats.waitingByPriority.medium} L:${stats.waitingByPriority.low}` : 'Waiting for workers to pick up.'}
           />
           <StatCard
             id="card-delayed"
@@ -290,7 +288,7 @@ export default function App() {
             value={stats.delayed}
             icon={Clock}
             variant="yellow"
-            description="Jobs scheduled for later; pushed to main queue upon expiration."
+            description="Scheduled jobs or retry-backoff jobs waiting for their timestamp."
           />
           <StatCard
             id="card-dlq"
@@ -298,27 +296,27 @@ export default function App() {
             value={stats.dlq}
             icon={Skull}
             variant="red"
-            description="Stalled jobs exceeding maximum retries; quarantined for review."
+            description="Failed after max retries. Replay or clear from controls."
           />
         </section>
 
         {/* Cluster Counters Block */}
         <section className="glass-panel p-6 mb-8 grid grid-cols-1 sm:grid-cols-3 gap-6 text-center divide-y sm:divide-y-0 sm:divide-x divide-slate-800/80">
           <div className="pt-4 sm:pt-0">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Total Enqueued Jobs</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Total Enqueued</p>
             <h4 className="font-outfit text-3xl font-bold text-indigo-400 mt-2">
               {stats.stats.enqueued.toLocaleString()}
             </h4>
           </div>
           <div className="pt-4 sm:pt-0">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Successful Jobs</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Successful</p>
             <h4 className="font-outfit text-3xl font-bold text-emerald-400 mt-2 flex items-center justify-center space-x-1.5">
               <CheckCircle2 className="w-6 h-6 text-emerald-400" />
               <span>{stats.stats.success.toLocaleString()}</span>
             </h4>
           </div>
           <div className="pt-4 sm:pt-0">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Failed / Retried</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Failed → DLQ</p>
             <h4 className="font-outfit text-3xl font-bold text-rose-400 mt-2 flex items-center justify-center space-x-1.5">
               <XCircle className="w-6 h-6 text-rose-400" />
               <span>{stats.stats.failure.toLocaleString()}</span>
@@ -326,22 +324,21 @@ export default function App() {
           </div>
         </section>
 
-        {/* Telemetry and Action Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          {/* Telemetry & Charts (Left 2 Columns) */}
+        {/* Main Grid: Chart + Controls */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start mb-8">
+          {/* Left: Chart + Logs */}
           <div className="lg:col-span-2 space-y-8">
-            
             {/* Live Chart */}
             <div className="glass-panel p-6">
               <div className="flex items-center space-x-2.5 border-b border-slate-800/80 pb-4 mb-6">
                 <TrendingUp className="w-5 h-5 text-sky-400" />
-                <h2 className="font-outfit font-semibold text-lg text-slate-200">Real-time Queue Volume History</h2>
+                <h2 className="font-outfit font-semibold text-lg text-slate-200">Real-time Queue Volume</h2>
               </div>
               
               <div className="h-[250px] w-full">
                 {chartHistory.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-slate-600">
-                    <p className="text-xs font-medium tracking-wide">Awaiting chart metrics history...</p>
+                    <p className="text-xs font-medium tracking-wide">Awaiting metrics data...</p>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -391,8 +388,9 @@ export default function App() {
             <JobLog logs={logs} onClear={() => setLogs([])} />
           </div>
 
-          {/* Controls Panel (Right 1 Column) */}
-          <div>
+          {/* Right: Job Creator + Quick Actions (stacked) */}
+          <div className="space-y-6">
+            <JobCreator apiBase={API_BASE} isLoading={isLoading} setIsLoading={setIsLoading} />
             <TriggerActions
               onAddInstantJobs={addInstantJobs}
               onAddDelayedJobs={addDelayedJobs}
@@ -404,6 +402,9 @@ export default function App() {
             />
           </div>
         </div>
+
+        {/* Job History — Full Width */}
+        <JobHistory apiBase={API_BASE} />
 
       </div>
     </div>
