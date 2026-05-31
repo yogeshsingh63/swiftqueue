@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, ChevronDown, Loader2, Sparkles } from 'lucide-react';
+import { Send, Loader2, Sparkles } from 'lucide-react';
 
 interface JobCreatorProps {
   apiBase: string;
@@ -10,10 +10,6 @@ interface JobCreatorProps {
 type JobType = 'http_request' | 'hash_file' | 'data_pipeline' | 'web_scrape' | 'send_email' | 'dns_lookup' | 'ping_monitor' | 'system_info';
 type Priority = 'high' | 'medium' | 'low';
 type RetryStrategy = 'fixed' | 'exponential';
-
-// =============================================================================
-// PRESET JOBS — Ready-to-go job templates
-// =============================================================================
 
 interface Preset {
   label: string;
@@ -28,179 +24,29 @@ interface Preset {
 }
 
 const PRESETS: Record<string, Preset> = {
-  custom: {
-    label: '✏️  Custom Job (Manual)',
-    description: 'Fill in all fields yourself',
-    type: 'http_request',
-    payload: {},
-    priority: 'medium',
-    delaySeconds: 0,
-    maxRetries: 3,
-    retryStrategy: 'exponential',
-    retryDelayMs: 2000,
-  },
-  github_api: {
-    label: '🐙  GitHub API Health Check',
-    description: 'GET request to GitHub Zen API — returns a random philosophy quote',
-    type: 'http_request',
-    payload: { url: 'https://api.github.com/zen', method: 'GET' },
-    priority: 'high',
-    delaySeconds: 0,
-    maxRetries: 3,
-    retryStrategy: 'exponential',
-    retryDelayMs: 2000,
-  },
-  httpbin_post: {
-    label: '📮  POST with JSON Body',
-    description: 'Sends a POST to httpbin.org with JSON payload — echoes back everything',
-    type: 'http_request',
-    payload: {
-      url: 'https://httpbin.org/post',
-      method: 'POST',
-      body: { name: 'SwiftQueue', version: 2, test: true },
-    },
-    priority: 'medium',
-    delaySeconds: 0,
-    maxRetries: 2,
-    retryStrategy: 'fixed',
-    retryDelayMs: 3000,
-  },
-  hash_linux_license: {
-    label: '🔐  Hash Linux License File',
-    description: 'Downloads Linux kernel COPYING file → SHA-256 hash',
-    type: 'hash_file',
-    payload: { url: 'https://raw.githubusercontent.com/torvalds/linux/master/COPYING' },
-    priority: 'medium',
-    delaySeconds: 0,
-    maxRetries: 3,
-    retryStrategy: 'exponential',
-    retryDelayMs: 2000,
-  },
-  pipeline_user_posts: {
-    label: '📊  Filter Posts by User',
-    description: 'Fetches 100 posts from JSONPlaceholder, filters by userId=3',
-    type: 'data_pipeline',
-    payload: {
-      url: 'https://jsonplaceholder.typicode.com/posts',
-      filterField: 'userId',
-      filterValue: '3',
-    },
-    priority: 'medium',
-    delaySeconds: 0,
-    maxRetries: 3,
-    retryStrategy: 'exponential',
-    retryDelayMs: 2000,
-  },
-  scrape_example: {
-    label: '🕷️  Scrape Example.com',
-    description: 'Extracts title, meta description, links, and word count',
-    type: 'web_scrape',
-    payload: { url: 'https://example.com' },
-    priority: 'low',
-    delaySeconds: 0,
-    maxRetries: 2,
-    retryStrategy: 'exponential',
-    retryDelayMs: 2000,
-  },
-  send_test_email: {
-    label: '📧  Send Test Email',
-    description: 'Sends a real email via Ethereal SMTP — click preview URL in result to view it!',
-    type: 'send_email',
-    payload: {
-      to: 'yogesh@example.com',
-      subject: 'Hello from SwiftQueue!',
-      body: '<h1>🚀 SwiftQueue Email</h1><p>This email was sent by a background worker job.</p><p>Powered by <strong>Nodemailer + Ethereal SMTP</strong>.</p>',
-    },
-    priority: 'high',
-    delaySeconds: 0,
-    maxRetries: 3,
-    retryStrategy: 'exponential',
-    retryDelayMs: 2000,
-  },
-  dns_google: {
-    label: '🌐  DNS Lookup — google.com',
-    description: 'Resolves A, AAAA, MX, NS, TXT records for google.com',
-    type: 'dns_lookup',
-    payload: { domain: 'google.com' },
-    priority: 'medium',
-    delaySeconds: 0,
-    maxRetries: 2,
-    retryStrategy: 'fixed',
-    retryDelayMs: 1000,
-  },
-  dns_github: {
-    label: '🌐  DNS Lookup — github.com',
-    description: 'Resolves all DNS records for github.com',
-    type: 'dns_lookup',
-    payload: { domain: 'github.com' },
-    priority: 'low',
-    delaySeconds: 0,
-    maxRetries: 2,
-    retryStrategy: 'fixed',
-    retryDelayMs: 1000,
-  },
-  ping_services: {
-    label: '📡  Ping 5 Services',
-    description: 'Health-checks Google, GitHub, httpbin, JSONPlaceholder, example.com in parallel',
-    type: 'ping_monitor',
-    payload: {
-      urls: [
-        'https://google.com',
-        'https://github.com',
-        'https://httpbin.org',
-        'https://jsonplaceholder.typicode.com',
-        'https://example.com',
-      ],
-    },
-    priority: 'high',
-    delaySeconds: 0,
-    maxRetries: 2,
-    retryStrategy: 'fixed',
-    retryDelayMs: 5000,
-  },
-  worker_health: {
-    label: '💻  Worker System Info',
-    description: 'Collects real CPU, memory, OS, and network info from the worker machine',
-    type: 'system_info',
-    payload: {},
-    priority: 'low',
-    delaySeconds: 0,
-    maxRetries: 1,
-    retryStrategy: 'fixed',
-    retryDelayMs: 1000,
-  },
-  delayed_email: {
-    label: '⏱️  Delayed Email (20s)',
-    description: 'Sends a test email but waits 20 seconds first — watch the Delayed counter!',
-    type: 'send_email',
-    payload: {
-      to: 'delayed@example.com',
-      subject: 'Delayed Email from SwiftQueue',
-      body: '<h1>⏰ This email was delayed!</h1><p>It sat in the delayed queue for 20 seconds before being sent.</p>',
-    },
-    priority: 'medium',
-    delaySeconds: 20,
-    maxRetries: 3,
-    retryStrategy: 'exponential',
-    retryDelayMs: 2000,
-  },
+  custom: { label: '✏️  Custom Job', description: 'Fill in all fields manually', type: 'http_request', payload: {}, priority: 'medium', delaySeconds: 0, maxRetries: 3, retryStrategy: 'exponential', retryDelayMs: 2000 },
+  github_api: { label: '🐙  GitHub Zen API', description: 'GET → GitHub Zen (random quote)', type: 'http_request', payload: { url: 'https://api.github.com/zen', method: 'GET' }, priority: 'high', delaySeconds: 0, maxRetries: 3, retryStrategy: 'exponential', retryDelayMs: 2000 },
+  httpbin_post: { label: '📮  POST JSON to httpbin', description: 'POST with body → echoes everything back', type: 'http_request', payload: { url: 'https://httpbin.org/post', method: 'POST', body: { name: 'SwiftQueue', version: 2, test: true } }, priority: 'medium', delaySeconds: 0, maxRetries: 2, retryStrategy: 'fixed', retryDelayMs: 3000 },
+  hash_linux: { label: '🔐  Hash Linux License', description: 'Downloads COPYING file → SHA-256', type: 'hash_file', payload: { url: 'https://raw.githubusercontent.com/torvalds/linux/master/COPYING' }, priority: 'medium', delaySeconds: 0, maxRetries: 3, retryStrategy: 'exponential', retryDelayMs: 2000 },
+  pipeline_posts: { label: '📊  Filter API Posts', description: 'Fetches 100 posts, filters userId=3', type: 'data_pipeline', payload: { url: 'https://jsonplaceholder.typicode.com/posts', filterField: 'userId', filterValue: '3' }, priority: 'medium', delaySeconds: 0, maxRetries: 3, retryStrategy: 'exponential', retryDelayMs: 2000 },
+  scrape_example: { label: '🕷️  Scrape example.com', description: 'Extracts title, links, word count', type: 'web_scrape', payload: { url: 'https://example.com' }, priority: 'low', delaySeconds: 0, maxRetries: 2, retryStrategy: 'exponential', retryDelayMs: 2000 },
+  send_email: { label: '📧  Send Test Email', description: 'Real SMTP email via Ethereal (viewable online)', type: 'send_email', payload: { to: 'yogesh@example.com', subject: 'Hello from SwiftQueue!', body: '<h1>SwiftQueue</h1><p>Sent by a background worker.</p>' }, priority: 'high', delaySeconds: 0, maxRetries: 3, retryStrategy: 'exponential', retryDelayMs: 2000 },
+  dns_google: { label: '🌐  DNS Lookup google.com', description: 'Resolves A, MX, NS, TXT records', type: 'dns_lookup', payload: { domain: 'google.com' }, priority: 'medium', delaySeconds: 0, maxRetries: 2, retryStrategy: 'fixed', retryDelayMs: 1000 },
+  dns_github: { label: '🌐  DNS Lookup github.com', description: 'Resolves all DNS records', type: 'dns_lookup', payload: { domain: 'github.com' }, priority: 'low', delaySeconds: 0, maxRetries: 2, retryStrategy: 'fixed', retryDelayMs: 1000 },
+  ping_services: { label: '📡  Ping 5 Services', description: 'Parallel health-check on 5 URLs', type: 'ping_monitor', payload: { urls: ['https://google.com', 'https://github.com', 'https://httpbin.org', 'https://jsonplaceholder.typicode.com', 'https://example.com'] }, priority: 'high', delaySeconds: 0, maxRetries: 2, retryStrategy: 'fixed', retryDelayMs: 5000 },
+  system_info: { label: '💻  Worker System Info', description: 'Collects CPU, RAM, OS from worker', type: 'system_info', payload: {}, priority: 'low', delaySeconds: 0, maxRetries: 1, retryStrategy: 'fixed', retryDelayMs: 1000 },
+  delayed_email: { label: '⏱️  Delayed Email (20s)', description: 'Email sent after 20-second delay', type: 'send_email', payload: { to: 'delayed@example.com', subject: 'Delayed Email', body: '<h1>⏰ Delayed</h1><p>This waited 20 seconds.</p>' }, priority: 'medium', delaySeconds: 20, maxRetries: 3, retryStrategy: 'exponential', retryDelayMs: 2000 },
 };
 
-const JOB_TYPE_LABELS: Record<JobType, { label: string; description: string }> = {
-  http_request: { label: 'HTTP Request', description: 'Make a real HTTP call to any URL' },
-  hash_file: { label: 'Hash File', description: 'Download a file and compute SHA-256' },
-  data_pipeline: { label: 'Data Pipeline', description: 'Fetch, filter, and aggregate JSON data' },
-  web_scrape: { label: 'Web Scrape', description: 'Extract metadata from an HTML page' },
-  send_email: { label: 'Send Email', description: 'Send a real email via Ethereal SMTP (viewable online)' },
-  dns_lookup: { label: 'DNS Lookup', description: 'Resolve DNS records (A, MX, NS, TXT) for a domain' },
-  ping_monitor: { label: 'Ping Monitor', description: 'Health-check multiple URLs in parallel' },
-  system_info: { label: 'System Info', description: 'Collect worker CPU, memory, and OS metrics' },
-};
-
-const PRIORITY_COLORS: Record<Priority, string> = {
-  high: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
-  medium: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-  low: 'border-slate-500/40 bg-slate-500/10 text-slate-300',
+const JOB_TYPE_LABELS: Record<JobType, { label: string; desc: string }> = {
+  http_request: { label: 'HTTP Request', desc: 'Make a real HTTP call to any URL' },
+  hash_file: { label: 'Hash File', desc: 'Download a file and compute SHA-256' },
+  data_pipeline: { label: 'Data Pipeline', desc: 'Fetch, filter, and aggregate JSON data' },
+  web_scrape: { label: 'Web Scrape', desc: 'Extract metadata from an HTML page' },
+  send_email: { label: 'Send Email', desc: 'Send a real email via Ethereal SMTP' },
+  dns_lookup: { label: 'DNS Lookup', desc: 'Resolve DNS records for a domain' },
+  ping_monitor: { label: 'Ping Monitor', desc: 'Health-check multiple URLs in parallel' },
+  system_info: { label: 'System Info', desc: 'Collect worker CPU, memory, OS metrics' },
 };
 
 export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setIsLoading }) => {
@@ -213,7 +59,6 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
   const [retryDelayMs, setRetryDelayMs] = useState(2000);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
-  // Type-specific payload fields
   const [httpUrl, setHttpUrl] = useState('https://httpbin.org/get');
   const [httpMethod, setHttpMethod] = useState('GET');
   const [httpBody, setHttpBody] = useState('');
@@ -224,87 +69,42 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
   const [scrapeUrl, setScrapeUrl] = useState('https://example.com');
   const [emailTo, setEmailTo] = useState('test@example.com');
   const [emailSubject, setEmailSubject] = useState('Hello from SwiftQueue!');
-  const [emailBody, setEmailBody] = useState('<h1>SwiftQueue Email Test</h1><p>Sent by a background worker.</p>');
+  const [emailBody, setEmailBody] = useState('<h1>Test</h1><p>Sent by SwiftQueue worker.</p>');
   const [dnsDomain, setDnsDomain] = useState('google.com');
   const [pingUrls, setPingUrls] = useState('https://google.com\nhttps://github.com\nhttps://httpbin.org');
 
-  // Apply a preset — fills in all fields at once
-  const applyPreset = (presetKey: string) => {
-    setSelectedPreset(presetKey);
-    const preset = PRESETS[presetKey];
-    if (!preset || presetKey === 'custom') return;
-
-    setJobType(preset.type);
-    setPriority(preset.priority);
-    setDelaySeconds(preset.delaySeconds);
-    setMaxRetries(preset.maxRetries);
-    setRetryStrategy(preset.retryStrategy);
-    setRetryDelayMs(preset.retryDelayMs);
-
-    switch (preset.type) {
-      case 'http_request':
-        setHttpUrl(preset.payload.url || '');
-        setHttpMethod(preset.payload.method || 'GET');
-        setHttpBody(preset.payload.body ? JSON.stringify(preset.payload.body, null, 2) : '');
-        break;
-      case 'hash_file':
-        setHashUrl(preset.payload.url || '');
-        break;
-      case 'data_pipeline':
-        setPipelineUrl(preset.payload.url || '');
-        setFilterField(preset.payload.filterField || '');
-        setFilterValue(preset.payload.filterValue || '');
-        break;
-      case 'web_scrape':
-        setScrapeUrl(preset.payload.url || '');
-        break;
-      case 'send_email':
-        setEmailTo(preset.payload.to || '');
-        setEmailSubject(preset.payload.subject || '');
-        setEmailBody(preset.payload.body || '');
-        break;
-      case 'dns_lookup':
-        setDnsDomain(preset.payload.domain || '');
-        break;
-      case 'ping_monitor':
-        setPingUrls((preset.payload.urls || []).join('\n'));
-        break;
-      case 'system_info':
-        // No payload fields to fill
-        break;
+  const applyPreset = (key: string) => {
+    setSelectedPreset(key);
+    const p = PRESETS[key];
+    if (!p || key === 'custom') return;
+    setJobType(p.type); setPriority(p.priority); setDelaySeconds(p.delaySeconds);
+    setMaxRetries(p.maxRetries); setRetryStrategy(p.retryStrategy); setRetryDelayMs(p.retryDelayMs);
+    switch (p.type) {
+      case 'http_request': setHttpUrl(p.payload.url || ''); setHttpMethod(p.payload.method || 'GET'); setHttpBody(p.payload.body ? JSON.stringify(p.payload.body, null, 2) : ''); break;
+      case 'hash_file': setHashUrl(p.payload.url || ''); break;
+      case 'data_pipeline': setPipelineUrl(p.payload.url || ''); setFilterField(p.payload.filterField || ''); setFilterValue(p.payload.filterValue || ''); break;
+      case 'web_scrape': setScrapeUrl(p.payload.url || ''); break;
+      case 'send_email': setEmailTo(p.payload.to || ''); setEmailSubject(p.payload.subject || ''); setEmailBody(p.payload.body || ''); break;
+      case 'dns_lookup': setDnsDomain(p.payload.domain || ''); break;
+      case 'ping_monitor': setPingUrls((p.payload.urls || []).join('\n')); break;
+      case 'system_info': break;
     }
   };
 
   const buildPayload = (): Record<string, any> => {
     switch (jobType) {
       case 'http_request': {
-        const payload: Record<string, any> = { url: httpUrl, method: httpMethod };
-        if (httpBody.trim()) {
-          try {
-            payload.body = JSON.parse(httpBody);
-          } catch {
-            payload.body = httpBody;
-          }
-        }
-        return payload;
+        const p: Record<string, any> = { url: httpUrl, method: httpMethod };
+        if (httpBody.trim()) { try { p.body = JSON.parse(httpBody); } catch { p.body = httpBody; } }
+        return p;
       }
-      case 'hash_file':
-        return { url: hashUrl };
-      case 'data_pipeline':
-        return {
-          url: pipelineUrl,
-          ...(filterField ? { filterField, filterValue } : {}),
-        };
-      case 'web_scrape':
-        return { url: scrapeUrl };
-      case 'send_email':
-        return { to: emailTo, subject: emailSubject, body: emailBody };
-      case 'dns_lookup':
-        return { domain: dnsDomain };
-      case 'ping_monitor':
-        return { urls: pingUrls.split('\n').map(u => u.trim()).filter(Boolean) };
-      case 'system_info':
-        return {};
+      case 'hash_file': return { url: hashUrl };
+      case 'data_pipeline': return { url: pipelineUrl, ...(filterField ? { filterField, filterValue } : {}) };
+      case 'web_scrape': return { url: scrapeUrl };
+      case 'send_email': return { to: emailTo, subject: emailSubject, body: emailBody };
+      case 'dns_lookup': return { domain: dnsDomain };
+      case 'ping_monitor': return { urls: pingUrls.split('\n').map(u => u.trim()).filter(Boolean) };
+      case 'system_info': return {};
     }
   };
 
@@ -312,284 +112,123 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
     e.preventDefault();
     setIsLoading(true);
     setLastResult(null);
-
     try {
-      const res = await fetch(`${apiBase}`, {
+      const res = await fetch(apiBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: jobType,
-          payload: buildPayload(),
-          priority,
-          delayMs: delaySeconds * 1000,
-          maxRetries,
-          retryStrategy,
-          retryDelayMs,
-        }),
+        body: JSON.stringify({ type: jobType, payload: buildPayload(), priority, delayMs: delaySeconds * 1000, maxRetries, retryStrategy, retryDelayMs }),
       });
       const data = await res.json();
-      if (res.ok) {
-        setLastResult(`✓ Job ${data.job.id.substring(0, 8)} enqueued (${jobType}, ${priority})`);
-      } else {
-        setLastResult(`✗ ${data.error}`);
-      }
+      setLastResult(res.ok ? `✓ ${data.job.id.substring(0, 8)} enqueued` : `✗ ${data.error}`);
     } catch (err: any) {
-      setLastResult(`✗ Network error: ${err.message}`);
+      setLastResult(`✗ ${err.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const inputClass =
-    'w-full bg-slate-950/80 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-all';
-
-  const labelClass = 'block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5';
+  const inp = 'w-full bg-zinc-900 border border-zinc-700 rounded-md px-2.5 py-1.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors';
+  const lbl = 'block text-[11px] font-medium text-zinc-400 mb-1';
 
   return (
-    <div className="glass-panel p-5 flex flex-col">
-      <div className="flex items-center space-x-2 border-b border-slate-800/80 pb-3 mb-4">
-        <Send className="w-4 h-4 text-indigo-400" />
-        <h2 className="font-outfit font-semibold text-base text-slate-200">Create Job</h2>
+    <div className="card p-5">
+      <div className="flex items-center space-x-2 pb-3 mb-3 border-b border-zinc-800">
+        <Send className="w-4 h-4 text-zinc-400" />
+        <h2 className="text-sm font-semibold text-zinc-200">Create Job</h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3.5">
-
-        {/* Preset Selector */}
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Preset */}
         <div>
-          <label className={labelClass}>
-            <span className="flex items-center space-x-1.5">
-              <Sparkles className="w-3 h-3 text-amber-400" />
-              <span>Quick Preset</span>
-            </span>
-          </label>
-          <div className="relative">
-            <select
-              id="select-preset"
-              value={selectedPreset}
-              onChange={(e) => applyPreset(e.target.value)}
-              className={`${inputClass} appearance-none cursor-pointer pr-8`}
-            >
-              {Object.entries(PRESETS).map(([key, { label }]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-          </div>
-          {selectedPreset !== 'custom' && (
-            <p className="text-[10px] text-indigo-400/70 mt-1">{PRESETS[selectedPreset].description}</p>
-          )}
+          <label className={lbl}><Sparkles className="w-3 h-3 inline mr-1 text-amber-400" />Preset</label>
+          <select id="select-preset" value={selectedPreset} onChange={(e) => applyPreset(e.target.value)} className={`${inp} cursor-pointer`}>
+            {Object.entries(PRESETS).map(([k, { label }]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+          {selectedPreset !== 'custom' && <p className="text-[10px] text-zinc-500 mt-1">{PRESETS[selectedPreset].description}</p>}
         </div>
 
         {/* Job Type */}
         <div>
-          <label className={labelClass}>Job Type</label>
-          <div className="relative">
-            <select
-              id="select-job-type"
-              value={jobType}
-              onChange={(e) => { setJobType(e.target.value as JobType); setSelectedPreset('custom'); }}
-              className={`${inputClass} appearance-none cursor-pointer pr-8`}
-            >
-              {Object.entries(JOB_TYPE_LABELS).map(([key, { label }]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-          </div>
-          <p className="text-[10px] text-slate-500 mt-1">{JOB_TYPE_LABELS[jobType].description}</p>
+          <label className={lbl}>Job Type</label>
+          <select id="select-job-type" value={jobType} onChange={(e) => { setJobType(e.target.value as JobType); setSelectedPreset('custom'); }} className={`${inp} cursor-pointer`}>
+            {Object.entries(JOB_TYPE_LABELS).map(([k, { label }]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+          <p className="text-[10px] text-zinc-500 mt-1">{JOB_TYPE_LABELS[jobType].desc}</p>
         </div>
 
-        {/* Dynamic Payload Fields */}
-        <div className="bg-slate-900/40 border border-slate-800/50 rounded-lg p-3 space-y-2.5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Payload</p>
+        {/* Payload */}
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-md p-2.5 space-y-2">
+          <p className="text-[10px] font-semibold text-zinc-500 uppercase">Payload</p>
 
-          {jobType === 'http_request' && (
-            <>
-              <div>
-                <label className={labelClass}>URL</label>
-                <input id="input-http-url" type="text" value={httpUrl} onChange={(e) => { setHttpUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="https://httpbin.org/get" />
-              </div>
-              <div>
-                <label className={labelClass}>Method</label>
-                <select id="select-http-method" value={httpMethod} onChange={(e) => { setHttpMethod(e.target.value); setSelectedPreset('custom'); }} className={`${inputClass} appearance-none cursor-pointer`}>
-                  {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-              {['POST', 'PUT', 'PATCH'].includes(httpMethod) && (
-                <div>
-                  <label className={labelClass}>Body (JSON)</label>
-                  <textarea
-                    id="input-http-body"
-                    value={httpBody}
-                    onChange={(e) => { setHttpBody(e.target.value); setSelectedPreset('custom'); }}
-                    className={`${inputClass} font-mono text-xs h-20 resize-none`}
-                    placeholder='{"key": "value"}'
-                  />
-                </div>
-              )}
-            </>
-          )}
+          {jobType === 'http_request' && (<>
+            <div><label className={lbl}>URL</label><input type="text" value={httpUrl} onChange={(e) => { setHttpUrl(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>
+            <div><label className={lbl}>Method</label><select value={httpMethod} onChange={(e) => { setHttpMethod(e.target.value); setSelectedPreset('custom'); }} className={`${inp} cursor-pointer`}>{['GET','POST','PUT','PATCH','DELETE','HEAD'].map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+            {['POST','PUT','PATCH'].includes(httpMethod) && <div><label className={lbl}>Body (JSON)</label><textarea value={httpBody} onChange={(e) => { setHttpBody(e.target.value); setSelectedPreset('custom'); }} className={`${inp} font-mono text-xs h-16 resize-none`} /></div>}
+          </>)}
 
-          {jobType === 'hash_file' && (
-            <div>
-              <label className={labelClass}>File URL</label>
-              <input id="input-hash-url" type="text" value={hashUrl} onChange={(e) => { setHashUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="https://example.com/file.txt" />
+          {jobType === 'hash_file' && <div><label className={lbl}>File URL</label><input type="text" value={hashUrl} onChange={(e) => { setHashUrl(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>}
+
+          {jobType === 'data_pipeline' && (<>
+            <div><label className={lbl}>API URL</label><input type="text" value={pipelineUrl} onChange={(e) => { setPipelineUrl(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className={lbl}>Filter Field</label><input type="text" value={filterField} onChange={(e) => { setFilterField(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>
+              <div><label className={lbl}>Filter Value</label><input type="text" value={filterValue} onChange={(e) => { setFilterValue(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>
             </div>
-          )}
+          </>)}
 
-          {jobType === 'data_pipeline' && (
-            <>
-              <div>
-                <label className={labelClass}>API URL</label>
-                <input id="input-pipeline-url" type="text" value={pipelineUrl} onChange={(e) => { setPipelineUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={labelClass}>Filter Field</label>
-                  <input id="input-filter-field" type="text" value={filterField} onChange={(e) => { setFilterField(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="userId" />
-                </div>
-                <div>
-                  <label className={labelClass}>Filter Value</label>
-                  <input id="input-filter-value" type="text" value={filterValue} onChange={(e) => { setFilterValue(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="1" />
-                </div>
-              </div>
-            </>
-          )}
+          {jobType === 'web_scrape' && <div><label className={lbl}>Target URL</label><input type="text" value={scrapeUrl} onChange={(e) => { setScrapeUrl(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>}
 
-          {jobType === 'web_scrape' && (
-            <div>
-              <label className={labelClass}>Target URL</label>
-              <input id="input-scrape-url" type="text" value={scrapeUrl} onChange={(e) => { setScrapeUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="https://example.com" />
-            </div>
-          )}
+          {jobType === 'send_email' && (<>
+            <div><label className={lbl}>To</label><input type="text" value={emailTo} onChange={(e) => { setEmailTo(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>
+            <div><label className={lbl}>Subject</label><input type="text" value={emailSubject} onChange={(e) => { setEmailSubject(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>
+            <div><label className={lbl}>Body (HTML)</label><textarea value={emailBody} onChange={(e) => { setEmailBody(e.target.value); setSelectedPreset('custom'); }} className={`${inp} font-mono text-xs h-16 resize-none`} /></div>
+          </>)}
 
-          {jobType === 'send_email' && (
-            <>
-              <div>
-                <label className={labelClass}>To (Email)</label>
-                <input id="input-email-to" type="text" value={emailTo} onChange={(e) => { setEmailTo(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="test@example.com" />
-              </div>
-              <div>
-                <label className={labelClass}>Subject</label>
-                <input id="input-email-subject" type="text" value={emailSubject} onChange={(e) => { setEmailSubject(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="Hello from SwiftQueue!" />
-              </div>
-              <div>
-                <label className={labelClass}>Body (HTML)</label>
-                <textarea
-                  id="input-email-body"
-                  value={emailBody}
-                  onChange={(e) => { setEmailBody(e.target.value); setSelectedPreset('custom'); }}
-                  className={`${inputClass} font-mono text-xs h-20 resize-none`}
-                  placeholder="<h1>Hello!</h1><p>Email content here</p>"
-                />
-              </div>
-            </>
-          )}
+          {jobType === 'dns_lookup' && <div><label className={lbl}>Domain</label><input type="text" value={dnsDomain} onChange={(e) => { setDnsDomain(e.target.value); setSelectedPreset('custom'); }} className={inp} /></div>}
 
-          {jobType === 'dns_lookup' && (
-            <div>
-              <label className={labelClass}>Domain</label>
-              <input id="input-dns-domain" type="text" value={dnsDomain} onChange={(e) => { setDnsDomain(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="google.com" />
-            </div>
-          )}
+          {jobType === 'ping_monitor' && <div><label className={lbl}>URLs (one per line)</label><textarea value={pingUrls} onChange={(e) => { setPingUrls(e.target.value); setSelectedPreset('custom'); }} className={`${inp} font-mono text-xs h-20 resize-none`} /></div>}
 
-          {jobType === 'ping_monitor' && (
-            <div>
-              <label className={labelClass}>URLs (one per line)</label>
-              <textarea
-                id="input-ping-urls"
-                value={pingUrls}
-                onChange={(e) => { setPingUrls(e.target.value); setSelectedPreset('custom'); }}
-                className={`${inputClass} font-mono text-xs h-24 resize-none`}
-                placeholder={'https://google.com\nhttps://github.com\nhttps://example.com'}
-              />
-            </div>
-          )}
-
-          {jobType === 'system_info' && (
-            <p className="text-[11px] text-slate-500 italic py-2">
-              No payload needed — this job collects CPU, memory, and OS info directly from the worker machine.
-            </p>
-          )}
+          {jobType === 'system_info' && <p className="text-[11px] text-zinc-500 italic py-1">No payload needed — reads from worker OS.</p>}
         </div>
 
         {/* Priority */}
         <div>
-          <label className={labelClass}>Priority</label>
-          <div className="flex gap-2">
+          <label className={lbl}>Priority</label>
+          <div className="flex gap-1.5">
             {(['high', 'medium', 'low'] as Priority[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPriority(p)}
-                className={`flex-1 text-xs font-bold uppercase tracking-wider py-1.5 rounded-lg border transition-all ${
+              <button key={p} type="button" onClick={() => setPriority(p)}
+                className={`flex-1 text-xs font-medium py-1.5 rounded-md border transition-colors ${
                   priority === p
-                    ? PRIORITY_COLORS[p]
-                    : 'border-slate-800/50 bg-slate-900/30 text-slate-600 hover:text-slate-400'
-                }`}
-              >
+                    ? p === 'high' ? 'bg-red-500/15 border-red-500/30 text-red-300'
+                      : p === 'medium' ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                      : 'bg-zinc-700/50 border-zinc-600 text-zinc-300'
+                    : 'bg-zinc-900 border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                }`}>
                 {p}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Delay + Retries row */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <div>
-            <label className={labelClass}>Delay (seconds)</label>
-            <input id="input-delay" type="number" min={0} max={300} value={delaySeconds} onChange={(e) => setDelaySeconds(parseInt(e.target.value) || 0)} className={inputClass} />
-          </div>
-          <div>
-            <label className={labelClass}>Max Retries</label>
-            <input id="input-retries" type="number" min={0} max={10} value={maxRetries} onChange={(e) => setMaxRetries(parseInt(e.target.value) || 0)} className={inputClass} />
-          </div>
+        {/* Config */}
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className={lbl}>Delay (sec)</label><input type="number" min={0} max={300} value={delaySeconds} onChange={(e) => setDelaySeconds(parseInt(e.target.value) || 0)} className={inp} /></div>
+          <div><label className={lbl}>Max Retries</label><input type="number" min={0} max={10} value={maxRetries} onChange={(e) => setMaxRetries(parseInt(e.target.value) || 0)} className={inp} /></div>
         </div>
-
-        {/* Retry Strategy */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <div>
-            <label className={labelClass}>Retry Strategy</label>
-            <select
-              id="select-retry-strategy"
-              value={retryStrategy}
-              onChange={(e) => setRetryStrategy(e.target.value as RetryStrategy)}
-              className={`${inputClass} appearance-none cursor-pointer`}
-            >
-              <option value="exponential">Exponential</option>
-              <option value="fixed">Fixed</option>
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Base Delay (ms)</label>
-            <input id="input-retry-delay" type="number" min={500} max={30000} step={500} value={retryDelayMs} onChange={(e) => setRetryDelayMs(parseInt(e.target.value) || 2000)} className={inputClass} />
-          </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className={lbl}>Retry Strategy</label><select value={retryStrategy} onChange={(e) => setRetryStrategy(e.target.value as RetryStrategy)} className={`${inp} cursor-pointer`}><option value="exponential">Exponential</option><option value="fixed">Fixed</option></select></div>
+          <div><label className={lbl}>Base Delay (ms)</label><input type="number" min={500} max={30000} step={500} value={retryDelayMs} onChange={(e) => setRetryDelayMs(parseInt(e.target.value) || 2000)} className={inp} /></div>
         </div>
 
         {/* Submit */}
-        <button
-          id="btn-create-job"
-          type="submit"
-          disabled={isLoading}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600/30 to-sky-600/30 hover:from-indigo-600/50 hover:to-sky-600/50 disabled:opacity-40 text-indigo-200 border border-indigo-500/30 rounded-xl transition-all duration-300 hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] font-semibold text-sm"
-        >
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Send className="w-4 h-4" />
-          )}
+        <button id="btn-create-job" type="submit" disabled={isLoading}
+          className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg transition-colors text-sm font-medium">
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           <span>Enqueue Job</span>
         </button>
 
-        {/* Result feedback */}
         {lastResult && (
-          <div className={`text-xs font-mono px-3 py-2 rounded-lg border ${
-            lastResult.startsWith('✓')
-              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400'
-              : 'bg-rose-500/5 border-rose-500/20 text-rose-400'
-          }`}>
+          <div className={`text-xs font-mono px-2.5 py-1.5 rounded border ${lastResult.startsWith('✓') ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
             {lastResult}
           </div>
         )}

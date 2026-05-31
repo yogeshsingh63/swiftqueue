@@ -10,6 +10,14 @@ interface StatCardProps {
   description: string;
 }
 
+const VARIANT_COLORS = {
+  blue: { accent: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+  purple: { accent: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
+  green: { accent: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+  red: { accent: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
+  yellow: { accent: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
+};
+
 export const StatCard: React.FC<StatCardProps> = ({
   id,
   title,
@@ -18,54 +26,22 @@ export const StatCard: React.FC<StatCardProps> = ({
   variant,
   description,
 }) => {
-  // Variant mapping to glow and text colors
-  const variantStyles = {
-    blue: {
-      glow: 'glow-blue',
-      iconBg: 'bg-sky-500/10 text-sky-400 border-sky-500/25',
-      textGlow: 'text-sky-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.4)]',
-    },
-    purple: {
-      glow: 'glow-purple',
-      iconBg: 'bg-purple-500/10 text-purple-400 border-purple-500/25',
-      textGlow: 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]',
-    },
-    green: {
-      glow: 'glow-green',
-      iconBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25',
-      textGlow: 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]',
-    },
-    red: {
-      glow: 'glow-red',
-      iconBg: 'bg-rose-500/10 text-rose-400 border-rose-500/25',
-      textGlow: 'text-rose-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.4)]',
-    },
-    yellow: {
-      glow: 'glow-yellow',
-      iconBg: 'bg-amber-500/10 text-amber-400 border-amber-500/25',
-      textGlow: 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]',
-    },
-  };
-
-  const style = variantStyles[variant];
+  const colors = VARIANT_COLORS[variant];
 
   return (
-    <div
-      id={id}
-      className={`glass-panel transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${style.glow} flex flex-col justify-between p-6`}
-    >
+    <div id={id} className="card p-5 transition-colors duration-200">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium tracking-wide text-slate-400">{title}</p>
-          <h3 className={`font-outfit text-3xl font-bold mt-2 ${style.textGlow}`}>
+          <p className="text-xs font-medium text-zinc-400">{title}</p>
+          <h3 className={`text-3xl font-bold mt-1.5 tabular-nums ${colors.accent}`}>
             {typeof value === 'number' ? value.toLocaleString() : value}
           </h3>
         </div>
-        <div className={`border p-3 rounded-xl ${style.iconBg} transition-transform duration-300 hover:rotate-6`}>
-          <Icon className="w-6 h-6" />
+        <div className={`p-2.5 rounded-lg border ${colors.bg} ${colors.border}`}>
+          <Icon className={`w-5 h-5 ${colors.accent}`} />
         </div>
       </div>
-      <p className="text-xs text-slate-500 mt-4 leading-relaxed">{description}</p>
+      <p className="text-[11px] text-zinc-500 mt-3 leading-relaxed">{description}</p>
     </div>
   );
 };
