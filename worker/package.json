@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.4.1",
+    "nodemailer": "^8.0.10"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
+    "@types/nodemailer": "^8.0.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"
   }

@@ -25,7 +25,7 @@ import { v4 as uuidv4 } from 'uuid';
 //   forceFail     → Testing flag — makes the processor throw immediately
 // =============================================================================
 
-export type JobType = 'http_request' | 'hash_file' | 'data_pipeline' | 'web_scrape';
+export type JobType = 'http_request' | 'hash_file' | 'data_pipeline' | 'web_scrape' | 'send_email' | 'dns_lookup' | 'ping_monitor' | 'system_info';
 export type JobPriority = 'high' | 'medium' | 'low';
 export type JobStatus = 'waiting' | 'processing' | 'completed' | 'failed' | 'dlq';
 export type RetryStrategy = 'fixed' | 'exponential';

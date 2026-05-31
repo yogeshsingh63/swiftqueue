@@ -7,15 +7,12 @@ interface JobCreatorProps {
   setIsLoading: (v: boolean) => void;
 }
 
-type JobType = 'http_request' | 'hash_file' | 'data_pipeline' | 'web_scrape';
+type JobType = 'http_request' | 'hash_file' | 'data_pipeline' | 'web_scrape' | 'send_email' | 'dns_lookup' | 'ping_monitor' | 'system_info';
 type Priority = 'high' | 'medium' | 'low';
 type RetryStrategy = 'fixed' | 'exponential';
 
 // =============================================================================
-// PRESET JOBS
-// =============================================================================
-// 7 ready-to-go job templates. Selecting one auto-fills the entire form.
-// The user can still tweak any field before submitting.
+// PRESET JOBS — Ready-to-go job templates
 // =============================================================================
 
 interface Preset {
@@ -55,7 +52,7 @@ const PRESETS: Record<string, Preset> = {
   },
   httpbin_post: {
     label: '📮  POST with JSON Body',
-    description: 'Sends a POST request to httpbin.org with a JSON payload — echoes back everything',
+    description: 'Sends a POST to httpbin.org with JSON payload — echoes back everything',
     type: 'http_request',
     payload: {
       url: 'https://httpbin.org/post',
@@ -70,7 +67,7 @@ const PRESETS: Record<string, Preset> = {
   },
   hash_linux_license: {
     label: '🔐  Hash Linux License File',
-    description: 'Downloads the Linux kernel COPYING file and computes its SHA-256 hash',
+    description: 'Downloads Linux kernel COPYING file → SHA-256 hash',
     type: 'hash_file',
     payload: { url: 'https://raw.githubusercontent.com/torvalds/linux/master/COPYING' },
     priority: 'medium',
@@ -79,20 +76,9 @@ const PRESETS: Record<string, Preset> = {
     retryStrategy: 'exponential',
     retryDelayMs: 2000,
   },
-  hash_node_license: {
-    label: '🔑  Hash Node.js License',
-    description: 'Downloads the Node.js LICENSE file and computes its SHA-256 hash',
-    type: 'hash_file',
-    payload: { url: 'https://raw.githubusercontent.com/nodejs/node/main/LICENSE' },
-    priority: 'low',
-    delaySeconds: 0,
-    maxRetries: 2,
-    retryStrategy: 'exponential',
-    retryDelayMs: 1500,
-  },
   pipeline_user_posts: {
     label: '📊  Filter Posts by User',
-    description: 'Fetches 100 posts from JSONPlaceholder, filters by userId=3, analyzes fields',
+    description: 'Fetches 100 posts from JSONPlaceholder, filters by userId=3',
     type: 'data_pipeline',
     payload: {
       url: 'https://jsonplaceholder.typicode.com/posts',
@@ -107,7 +93,7 @@ const PRESETS: Record<string, Preset> = {
   },
   scrape_example: {
     label: '🕷️  Scrape Example.com',
-    description: 'Extracts title, meta description, links, and word count from example.com',
+    description: 'Extracts title, meta description, links, and word count',
     type: 'web_scrape',
     payload: { url: 'https://example.com' },
     priority: 'low',
@@ -116,13 +102,84 @@ const PRESETS: Record<string, Preset> = {
     retryStrategy: 'exponential',
     retryDelayMs: 2000,
   },
-  delayed_scrape: {
-    label: '⏱️  Delayed Scrape (15s)',
-    description: 'Scrapes httpbin.org but delayed by 15 seconds — watch the Delayed counter!',
-    type: 'web_scrape',
-    payload: { url: 'https://httpbin.org' },
+  send_test_email: {
+    label: '📧  Send Test Email',
+    description: 'Sends a real email via Ethereal SMTP — click preview URL in result to view it!',
+    type: 'send_email',
+    payload: {
+      to: 'yogesh@example.com',
+      subject: 'Hello from SwiftQueue!',
+      body: '<h1>🚀 SwiftQueue Email</h1><p>This email was sent by a background worker job.</p><p>Powered by <strong>Nodemailer + Ethereal SMTP</strong>.</p>',
+    },
     priority: 'high',
-    delaySeconds: 15,
+    delaySeconds: 0,
+    maxRetries: 3,
+    retryStrategy: 'exponential',
+    retryDelayMs: 2000,
+  },
+  dns_google: {
+    label: '🌐  DNS Lookup — google.com',
+    description: 'Resolves A, AAAA, MX, NS, TXT records for google.com',
+    type: 'dns_lookup',
+    payload: { domain: 'google.com' },
+    priority: 'medium',
+    delaySeconds: 0,
+    maxRetries: 2,
+    retryStrategy: 'fixed',
+    retryDelayMs: 1000,
+  },
+  dns_github: {
+    label: '🌐  DNS Lookup — github.com',
+    description: 'Resolves all DNS records for github.com',
+    type: 'dns_lookup',
+    payload: { domain: 'github.com' },
+    priority: 'low',
+    delaySeconds: 0,
+    maxRetries: 2,
+    retryStrategy: 'fixed',
+    retryDelayMs: 1000,
+  },
+  ping_services: {
+    label: '📡  Ping 5 Services',
+    description: 'Health-checks Google, GitHub, httpbin, JSONPlaceholder, example.com in parallel',
+    type: 'ping_monitor',
+    payload: {
+      urls: [
+        'https://google.com',
+        'https://github.com',
+        'https://httpbin.org',
+        'https://jsonplaceholder.typicode.com',
+        'https://example.com',
+      ],
+    },
+    priority: 'high',
+    delaySeconds: 0,
+    maxRetries: 2,
+    retryStrategy: 'fixed',
+    retryDelayMs: 5000,
+  },
+  worker_health: {
+    label: '💻  Worker System Info',
+    description: 'Collects real CPU, memory, OS, and network info from the worker machine',
+    type: 'system_info',
+    payload: {},
+    priority: 'low',
+    delaySeconds: 0,
+    maxRetries: 1,
+    retryStrategy: 'fixed',
+    retryDelayMs: 1000,
+  },
+  delayed_email: {
+    label: '⏱️  Delayed Email (20s)',
+    description: 'Sends a test email but waits 20 seconds first — watch the Delayed counter!',
+    type: 'send_email',
+    payload: {
+      to: 'delayed@example.com',
+      subject: 'Delayed Email from SwiftQueue',
+      body: '<h1>⏰ This email was delayed!</h1><p>It sat in the delayed queue for 20 seconds before being sent.</p>',
+    },
+    priority: 'medium',
+    delaySeconds: 20,
     maxRetries: 3,
     retryStrategy: 'exponential',
     retryDelayMs: 2000,
@@ -134,6 +191,10 @@ const JOB_TYPE_LABELS: Record<JobType, { label: string; description: string }> =
   hash_file: { label: 'Hash File', description: 'Download a file and compute SHA-256' },
   data_pipeline: { label: 'Data Pipeline', description: 'Fetch, filter, and aggregate JSON data' },
   web_scrape: { label: 'Web Scrape', description: 'Extract metadata from an HTML page' },
+  send_email: { label: 'Send Email', description: 'Send a real email via Ethereal SMTP (viewable online)' },
+  dns_lookup: { label: 'DNS Lookup', description: 'Resolve DNS records (A, MX, NS, TXT) for a domain' },
+  ping_monitor: { label: 'Ping Monitor', description: 'Health-check multiple URLs in parallel' },
+  system_info: { label: 'System Info', description: 'Collect worker CPU, memory, and OS metrics' },
 };
 
 const PRIORITY_COLORS: Record<Priority, string> = {
@@ -161,6 +222,11 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
   const [filterField, setFilterField] = useState('userId');
   const [filterValue, setFilterValue] = useState('1');
   const [scrapeUrl, setScrapeUrl] = useState('https://example.com');
+  const [emailTo, setEmailTo] = useState('test@example.com');
+  const [emailSubject, setEmailSubject] = useState('Hello from SwiftQueue!');
+  const [emailBody, setEmailBody] = useState('<h1>SwiftQueue Email Test</h1><p>Sent by a background worker.</p>');
+  const [dnsDomain, setDnsDomain] = useState('google.com');
+  const [pingUrls, setPingUrls] = useState('https://google.com\nhttps://github.com\nhttps://httpbin.org');
 
   // Apply a preset — fills in all fields at once
   const applyPreset = (presetKey: string) => {
@@ -175,7 +241,6 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
     setRetryStrategy(preset.retryStrategy);
     setRetryDelayMs(preset.retryDelayMs);
 
-    // Fill type-specific payload fields
     switch (preset.type) {
       case 'http_request':
         setHttpUrl(preset.payload.url || '');
@@ -192,6 +257,20 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
         break;
       case 'web_scrape':
         setScrapeUrl(preset.payload.url || '');
+        break;
+      case 'send_email':
+        setEmailTo(preset.payload.to || '');
+        setEmailSubject(preset.payload.subject || '');
+        setEmailBody(preset.payload.body || '');
+        break;
+      case 'dns_lookup':
+        setDnsDomain(preset.payload.domain || '');
+        break;
+      case 'ping_monitor':
+        setPingUrls((preset.payload.urls || []).join('\n'));
+        break;
+      case 'system_info':
+        // No payload fields to fill
         break;
     }
   };
@@ -218,6 +297,14 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
         };
       case 'web_scrape':
         return { url: scrapeUrl };
+      case 'send_email':
+        return { to: emailTo, subject: emailSubject, body: emailBody };
+      case 'dns_lookup':
+        return { domain: dnsDomain };
+      case 'ping_monitor':
+        return { urls: pingUrls.split('\n').map(u => u.trim()).filter(Boolean) };
+      case 'system_info':
+        return {};
     }
   };
 
@@ -376,6 +463,55 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
               <label className={labelClass}>Target URL</label>
               <input id="input-scrape-url" type="text" value={scrapeUrl} onChange={(e) => { setScrapeUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="https://example.com" />
             </div>
+          )}
+
+          {jobType === 'send_email' && (
+            <>
+              <div>
+                <label className={labelClass}>To (Email)</label>
+                <input id="input-email-to" type="text" value={emailTo} onChange={(e) => { setEmailTo(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="test@example.com" />
+              </div>
+              <div>
+                <label className={labelClass}>Subject</label>
+                <input id="input-email-subject" type="text" value={emailSubject} onChange={(e) => { setEmailSubject(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="Hello from SwiftQueue!" />
+              </div>
+              <div>
+                <label className={labelClass}>Body (HTML)</label>
+                <textarea
+                  id="input-email-body"
+                  value={emailBody}
+                  onChange={(e) => { setEmailBody(e.target.value); setSelectedPreset('custom'); }}
+                  className={`${inputClass} font-mono text-xs h-20 resize-none`}
+                  placeholder="<h1>Hello!</h1><p>Email content here</p>"
+                />
+              </div>
+            </>
+          )}
+
+          {jobType === 'dns_lookup' && (
+            <div>
+              <label className={labelClass}>Domain</label>
+              <input id="input-dns-domain" type="text" value={dnsDomain} onChange={(e) => { setDnsDomain(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="google.com" />
+            </div>
+          )}
+
+          {jobType === 'ping_monitor' && (
+            <div>
+              <label className={labelClass}>URLs (one per line)</label>
+              <textarea
+                id="input-ping-urls"
+                value={pingUrls}
+                onChange={(e) => { setPingUrls(e.target.value); setSelectedPreset('custom'); }}
+                className={`${inputClass} font-mono text-xs h-24 resize-none`}
+                placeholder={'https://google.com\nhttps://github.com\nhttps://example.com'}
+              />
+            </div>
+          )}
+
+          {jobType === 'system_info' && (
+            <p className="text-[11px] text-slate-500 italic py-2">
+              No payload needed — this job collects CPU, memory, and OS info directly from the worker machine.
+            </p>
           )}
         </div>
 

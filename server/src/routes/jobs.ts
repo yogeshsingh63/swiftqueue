@@ -31,7 +31,7 @@ const router = Router();
 //   gives the API caller an immediate 400 error with a clear message.
 // =============================================================================
 
-const VALID_JOB_TYPES: JobType[] = ['http_request', 'hash_file', 'data_pipeline', 'web_scrape'];
+const VALID_JOB_TYPES: JobType[] = ['http_request', 'hash_file', 'data_pipeline', 'web_scrape', 'send_email', 'dns_lookup', 'ping_monitor', 'system_info'];
 
 function validatePayload(type: JobType, payload: Record<string, any>): string | null {
   switch (type) {
@@ -74,6 +74,27 @@ function validatePayload(type: JobType, payload: Record<string, any>): string | 
       } catch {
         return `Invalid URL: "${payload.url}"`;
       }
+      return null;
+
+    case 'send_email':
+      // email validation is optional — defaults exist in the processor
+      if (payload.to && !payload.to.includes('@')) {
+        return `Invalid email address: "${payload.to}"`;
+      }
+      return null;
+
+    case 'dns_lookup':
+      if (!payload.domain) return 'dns_lookup requires "domain" in payload';
+      return null;
+
+    case 'ping_monitor':
+      if (!payload.urls || !Array.isArray(payload.urls) || payload.urls.length === 0) {
+        return 'ping_monitor requires "urls" (array of URL strings) in payload';
+      }
+      return null;
+
+    case 'system_info':
+      // No payload validation needed — reads from the worker's own OS
       return null;
 
     default:
@@ -182,6 +203,37 @@ const getRandomPayload = (type: JobType): Record<string, any> => {
       ];
       return { url: sites[Math.floor(Math.random() * sites.length)] };
     }
+    case 'send_email': {
+      const subjects = [
+        'SwiftQueue Test Email',
+        'Order Confirmation #' + Math.floor(Math.random() * 10000),
+        'Weekly Report Ready',
+        'Password Reset Request',
+      ];
+      return {
+        to: 'test@example.com',
+        subject: subjects[Math.floor(Math.random() * subjects.length)],
+        body: '<h1>Hello from SwiftQueue!</h1><p>This is a test email sent by a background worker.</p>',
+      };
+    }
+    case 'dns_lookup': {
+      const domains = ['google.com', 'github.com', 'nodejs.org', 'reddit.com', 'cloudflare.com'];
+      return { domain: domains[Math.floor(Math.random() * domains.length)] };
+    }
+    case 'ping_monitor': {
+      return {
+        urls: [
+          'https://google.com',
+          'https://github.com',
+          'https://httpbin.org',
+          'https://jsonplaceholder.typicode.com',
+          'https://example.com',
+        ],
+      };
+    }
+    case 'system_info': {
+      return {};
+    }
     default:
       return {};
   }
@@ -196,7 +248,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Count must be between 1 and 100.' });
     }
 
-    const types: JobType[] = ['http_request', 'hash_file', 'data_pipeline', 'web_scrape'];
+    const types: JobType[] = ['http_request', 'hash_file', 'data_pipeline', 'web_scrape', 'send_email', 'dns_lookup', 'ping_monitor', 'system_info'];
     const jobs = [];
 
     for (let i = 0; i < jobCount; i++) {
