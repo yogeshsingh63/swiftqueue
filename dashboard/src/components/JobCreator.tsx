@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, ChevronDown, Loader2 } from 'lucide-react';
+import { Send, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 
 interface JobCreatorProps {
   apiBase: string;
@@ -10,6 +10,124 @@ interface JobCreatorProps {
 type JobType = 'http_request' | 'hash_file' | 'data_pipeline' | 'web_scrape';
 type Priority = 'high' | 'medium' | 'low';
 type RetryStrategy = 'fixed' | 'exponential';
+
+// =============================================================================
+// PRESET JOBS
+// =============================================================================
+// 7 ready-to-go job templates. Selecting one auto-fills the entire form.
+// The user can still tweak any field before submitting.
+// =============================================================================
+
+interface Preset {
+  label: string;
+  description: string;
+  type: JobType;
+  payload: Record<string, any>;
+  priority: Priority;
+  delaySeconds: number;
+  maxRetries: number;
+  retryStrategy: RetryStrategy;
+  retryDelayMs: number;
+}
+
+const PRESETS: Record<string, Preset> = {
+  custom: {
+    label: '✏️  Custom Job (Manual)',
+    description: 'Fill in all fields yourself',
+    type: 'http_request',
+    payload: {},
+    priority: 'medium',
+    delaySeconds: 0,
+    maxRetries: 3,
+    retryStrategy: 'exponential',
+    retryDelayMs: 2000,
+  },
+  github_api: {
+    label: '🐙  GitHub API Health Check',
+    description: 'GET request to GitHub Zen API — returns a random philosophy quote',
+    type: 'http_request',
+    payload: { url: 'https://api.github.com/zen', method: 'GET' },
+    priority: 'high',
+    delaySeconds: 0,
+    maxRetries: 3,
+    retryStrategy: 'exponential',
+    retryDelayMs: 2000,
+  },
+  httpbin_post: {
+    label: '📮  POST with JSON Body',
+    description: 'Sends a POST request to httpbin.org with a JSON payload — echoes back everything',
+    type: 'http_request',
+    payload: {
+      url: 'https://httpbin.org/post',
+      method: 'POST',
+      body: { name: 'SwiftQueue', version: 2, test: true },
+    },
+    priority: 'medium',
+    delaySeconds: 0,
+    maxRetries: 2,
+    retryStrategy: 'fixed',
+    retryDelayMs: 3000,
+  },
+  hash_linux_license: {
+    label: '🔐  Hash Linux License File',
+    description: 'Downloads the Linux kernel COPYING file and computes its SHA-256 hash',
+    type: 'hash_file',
+    payload: { url: 'https://raw.githubusercontent.com/torvalds/linux/master/COPYING' },
+    priority: 'medium',
+    delaySeconds: 0,
+    maxRetries: 3,
+    retryStrategy: 'exponential',
+    retryDelayMs: 2000,
+  },
+  hash_node_license: {
+    label: '🔑  Hash Node.js License',
+    description: 'Downloads the Node.js LICENSE file and computes its SHA-256 hash',
+    type: 'hash_file',
+    payload: { url: 'https://raw.githubusercontent.com/nodejs/node/main/LICENSE' },
+    priority: 'low',
+    delaySeconds: 0,
+    maxRetries: 2,
+    retryStrategy: 'exponential',
+    retryDelayMs: 1500,
+  },
+  pipeline_user_posts: {
+    label: '📊  Filter Posts by User',
+    description: 'Fetches 100 posts from JSONPlaceholder, filters by userId=3, analyzes fields',
+    type: 'data_pipeline',
+    payload: {
+      url: 'https://jsonplaceholder.typicode.com/posts',
+      filterField: 'userId',
+      filterValue: '3',
+    },
+    priority: 'medium',
+    delaySeconds: 0,
+    maxRetries: 3,
+    retryStrategy: 'exponential',
+    retryDelayMs: 2000,
+  },
+  scrape_example: {
+    label: '🕷️  Scrape Example.com',
+    description: 'Extracts title, meta description, links, and word count from example.com',
+    type: 'web_scrape',
+    payload: { url: 'https://example.com' },
+    priority: 'low',
+    delaySeconds: 0,
+    maxRetries: 2,
+    retryStrategy: 'exponential',
+    retryDelayMs: 2000,
+  },
+  delayed_scrape: {
+    label: '⏱️  Delayed Scrape (15s)',
+    description: 'Scrapes httpbin.org but delayed by 15 seconds — watch the Delayed counter!',
+    type: 'web_scrape',
+    payload: { url: 'https://httpbin.org' },
+    priority: 'high',
+    delaySeconds: 15,
+    maxRetries: 3,
+    retryStrategy: 'exponential',
+    retryDelayMs: 2000,
+  },
+};
 
 const JOB_TYPE_LABELS: Record<JobType, { label: string; description: string }> = {
   http_request: { label: 'HTTP Request', description: 'Make a real HTTP call to any URL' },
@@ -25,6 +143,7 @@ const PRIORITY_COLORS: Record<Priority, string> = {
 };
 
 export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setIsLoading }) => {
+  const [selectedPreset, setSelectedPreset] = useState<string>('custom');
   const [jobType, setJobType] = useState<JobType>('http_request');
   const [priority, setPriority] = useState<Priority>('medium');
   const [delaySeconds, setDelaySeconds] = useState(0);
@@ -36,16 +155,60 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
   // Type-specific payload fields
   const [httpUrl, setHttpUrl] = useState('https://httpbin.org/get');
   const [httpMethod, setHttpMethod] = useState('GET');
+  const [httpBody, setHttpBody] = useState('');
   const [hashUrl, setHashUrl] = useState('https://raw.githubusercontent.com/torvalds/linux/master/COPYING');
   const [pipelineUrl, setPipelineUrl] = useState('https://jsonplaceholder.typicode.com/posts');
   const [filterField, setFilterField] = useState('userId');
   const [filterValue, setFilterValue] = useState('1');
   const [scrapeUrl, setScrapeUrl] = useState('https://example.com');
 
+  // Apply a preset — fills in all fields at once
+  const applyPreset = (presetKey: string) => {
+    setSelectedPreset(presetKey);
+    const preset = PRESETS[presetKey];
+    if (!preset || presetKey === 'custom') return;
+
+    setJobType(preset.type);
+    setPriority(preset.priority);
+    setDelaySeconds(preset.delaySeconds);
+    setMaxRetries(preset.maxRetries);
+    setRetryStrategy(preset.retryStrategy);
+    setRetryDelayMs(preset.retryDelayMs);
+
+    // Fill type-specific payload fields
+    switch (preset.type) {
+      case 'http_request':
+        setHttpUrl(preset.payload.url || '');
+        setHttpMethod(preset.payload.method || 'GET');
+        setHttpBody(preset.payload.body ? JSON.stringify(preset.payload.body, null, 2) : '');
+        break;
+      case 'hash_file':
+        setHashUrl(preset.payload.url || '');
+        break;
+      case 'data_pipeline':
+        setPipelineUrl(preset.payload.url || '');
+        setFilterField(preset.payload.filterField || '');
+        setFilterValue(preset.payload.filterValue || '');
+        break;
+      case 'web_scrape':
+        setScrapeUrl(preset.payload.url || '');
+        break;
+    }
+  };
+
   const buildPayload = (): Record<string, any> => {
     switch (jobType) {
-      case 'http_request':
-        return { url: httpUrl, method: httpMethod };
+      case 'http_request': {
+        const payload: Record<string, any> = { url: httpUrl, method: httpMethod };
+        if (httpBody.trim()) {
+          try {
+            payload.body = JSON.parse(httpBody);
+          } catch {
+            payload.body = httpBody;
+          }
+        }
+        return payload;
+      }
       case 'hash_file':
         return { url: hashUrl };
       case 'data_pipeline':
@@ -103,6 +266,33 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3.5">
+
+        {/* Preset Selector */}
+        <div>
+          <label className={labelClass}>
+            <span className="flex items-center space-x-1.5">
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              <span>Quick Preset</span>
+            </span>
+          </label>
+          <div className="relative">
+            <select
+              id="select-preset"
+              value={selectedPreset}
+              onChange={(e) => applyPreset(e.target.value)}
+              className={`${inputClass} appearance-none cursor-pointer pr-8`}
+            >
+              {Object.entries(PRESETS).map(([key, { label }]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+          </div>
+          {selectedPreset !== 'custom' && (
+            <p className="text-[10px] text-indigo-400/70 mt-1">{PRESETS[selectedPreset].description}</p>
+          )}
+        </div>
+
         {/* Job Type */}
         <div>
           <label className={labelClass}>Job Type</label>
@@ -110,7 +300,7 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
             <select
               id="select-job-type"
               value={jobType}
-              onChange={(e) => setJobType(e.target.value as JobType)}
+              onChange={(e) => { setJobType(e.target.value as JobType); setSelectedPreset('custom'); }}
               className={`${inputClass} appearance-none cursor-pointer pr-8`}
             >
               {Object.entries(JOB_TYPE_LABELS).map(([key, { label }]) => (
@@ -130,23 +320,35 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
             <>
               <div>
                 <label className={labelClass}>URL</label>
-                <input id="input-http-url" type="text" value={httpUrl} onChange={(e) => setHttpUrl(e.target.value)} className={inputClass} placeholder="https://httpbin.org/get" />
+                <input id="input-http-url" type="text" value={httpUrl} onChange={(e) => { setHttpUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="https://httpbin.org/get" />
               </div>
               <div>
                 <label className={labelClass}>Method</label>
-                <select id="select-http-method" value={httpMethod} onChange={(e) => setHttpMethod(e.target.value)} className={`${inputClass} appearance-none cursor-pointer`}>
+                <select id="select-http-method" value={httpMethod} onChange={(e) => { setHttpMethod(e.target.value); setSelectedPreset('custom'); }} className={`${inputClass} appearance-none cursor-pointer`}>
                   {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].map((m) => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
               </div>
+              {['POST', 'PUT', 'PATCH'].includes(httpMethod) && (
+                <div>
+                  <label className={labelClass}>Body (JSON)</label>
+                  <textarea
+                    id="input-http-body"
+                    value={httpBody}
+                    onChange={(e) => { setHttpBody(e.target.value); setSelectedPreset('custom'); }}
+                    className={`${inputClass} font-mono text-xs h-20 resize-none`}
+                    placeholder='{"key": "value"}'
+                  />
+                </div>
+              )}
             </>
           )}
 
           {jobType === 'hash_file' && (
             <div>
               <label className={labelClass}>File URL</label>
-              <input id="input-hash-url" type="text" value={hashUrl} onChange={(e) => setHashUrl(e.target.value)} className={inputClass} placeholder="https://example.com/file.txt" />
+              <input id="input-hash-url" type="text" value={hashUrl} onChange={(e) => { setHashUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="https://example.com/file.txt" />
             </div>
           )}
 
@@ -154,16 +356,16 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
             <>
               <div>
                 <label className={labelClass}>API URL</label>
-                <input id="input-pipeline-url" type="text" value={pipelineUrl} onChange={(e) => setPipelineUrl(e.target.value)} className={inputClass} />
+                <input id="input-pipeline-url" type="text" value={pipelineUrl} onChange={(e) => { setPipelineUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className={labelClass}>Filter Field</label>
-                  <input id="input-filter-field" type="text" value={filterField} onChange={(e) => setFilterField(e.target.value)} className={inputClass} placeholder="userId" />
+                  <input id="input-filter-field" type="text" value={filterField} onChange={(e) => { setFilterField(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="userId" />
                 </div>
                 <div>
                   <label className={labelClass}>Filter Value</label>
-                  <input id="input-filter-value" type="text" value={filterValue} onChange={(e) => setFilterValue(e.target.value)} className={inputClass} placeholder="1" />
+                  <input id="input-filter-value" type="text" value={filterValue} onChange={(e) => { setFilterValue(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="1" />
                 </div>
               </div>
             </>
@@ -172,7 +374,7 @@ export const JobCreator: React.FC<JobCreatorProps> = ({ apiBase, isLoading, setI
           {jobType === 'web_scrape' && (
             <div>
               <label className={labelClass}>Target URL</label>
-              <input id="input-scrape-url" type="text" value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} className={inputClass} placeholder="https://example.com" />
+              <input id="input-scrape-url" type="text" value={scrapeUrl} onChange={(e) => { setScrapeUrl(e.target.value); setSelectedPreset('custom'); }} className={inputClass} placeholder="https://example.com" />
             </div>
           )}
         </div>
